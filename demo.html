@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Digital Totem · 新中式心身疗愈智能手串</title>
+  <meta name="description" content="顺时调神，欢喜自来 — 新中式心身疗愈智能手串数字落地页">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+
+    <!-- ===================== OVERLAYS ===================== -->
+
+    <!-- Onboarding Overlay (First Visit) -->
+    <div id="onboarding-overlay" class="overlay hidden">
+      <div class="overlay-inner onboarding-inner">
+        <!-- Step 1: Touch the bead -->
+        <div id="onboard-step-1" class="onboard-step active">
+          <div class="onboard-bead-wrap">
+            <div class="bead-display onboard-bead">
+              <div class="bead-sphere"></div>
+              <div class="bead-ripple r1"></div>
+              <div class="bead-ripple r2"></div>
+              <div class="bead-ripple r3"></div>
+            </div>
+          </div>
+          <p class="onboard-hint">请抚摸主珠<br>为手串注入第一缕心神</p>
+          <button id="onboard-touch-btn" class="btn btn-primary">触摸主珠</button>
+        </div>
+        <!-- Step 2: Three Questions -->
+        <div id="onboard-step-2" class="onboard-step">
+          <h3 class="onboard-title">初始情志评估</h3>
+          <div id="onboard-questions"></div>
+        </div>
+        <!-- Step 3: AI Greeting -->
+        <div id="onboard-step-3" class="onboard-step">
+          <div class="bead-display onboard-bead glowing">
+            <div class="bead-sphere"></div>
+            <div class="bead-glow-ring"></div>
+          </div>
+          <p class="onboard-voice">"结界已开，顺时调神，欢喜自来"</p>
+          <p class="onboard-constitution" id="onboard-result"></p>
+          <button id="onboard-enter-btn" class="btn btn-primary">进入结界</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SOS Emergency Overlay -->
+    <div id="sos-overlay" class="overlay hidden">
+      <canvas id="sos-ink-canvas"></canvas>
+      <div class="sos-cabin glass-panel">
+        <div class="sos-icon-wrap"><span class="sos-icon">🧘</span></div>
+        <h2 class="sos-title">SOS 地心引力安抚舱</h2>
+        <p class="sos-guide" id="sos-text">感知到你此时的气机极度紊乱。<br>听我的声音，深深吸气，感受双脚踩在坚实的大地上，<br>天塌不下来。手串在，我在。</p>
+        <div id="sos-breathe" class="breathe-circle"><span>呼吸</span></div>
+        <button id="sos-exit-btn" class="btn btn-glass">回归平静</button>
+      </div>
+    </div>
+
+    <!-- Solar Term Popup -->
+    <div id="solar-overlay" class="overlay hidden">
+      <div class="solar-cabin glass-panel">
+        <div class="solar-icon-wrap"><span>🌿</span></div>
+        <h2 id="solar-title" class="solar-term-title">节气提醒</h2>
+        <p id="solar-desc" class="solar-desc"></p>
+        <div id="solar-product" class="solar-product"></div>
+        <button id="solar-close-btn" class="btn btn-glass">知道了</button>
+      </div>
+    </div>
+
+    <!-- Prescription Card Preview -->
+    <div id="card-overlay" class="overlay hidden">
+      <div class="card-preview">
+        <canvas id="prescription-canvas" width="640" height="960"></canvas>
+        <div class="card-actions">
+          <button id="card-download-btn" class="btn btn-primary">保存卡片</button>
+          <button id="card-close-btn" class="btn btn-outline">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ==================== MAIN CONTENT ==================== -->
+    <main id="main-content" class="hidden">
+
+      <!-- Header -->
+      <header id="header-section" class="section fade-section">
+        <div class="header-dates">
+          <span id="solar-date" class="date-text"></span>
+          <span class="date-divider">·</span>
+          <span id="lunar-date" class="date-text date-lunar"></span>
+        </div>
+        <div id="energy-bar" class="energy-bar">
+          <div class="energy-color-strip" id="energy-strip"></div>
+          <div class="energy-info">
+            <span class="energy-label">今日能量</span>
+            <span class="energy-value" id="energy-value">木气旺盛</span>
+          </div>
+        </div>
+        <p id="greeting-text" class="greeting">顺时调神，欢喜自来</p>
+      </header>
+
+      <!-- Bead Visualization -->
+      <section id="bead-section" class="section fade-section">
+        <div id="main-bead" class="bead-display hero-bead">
+          <div class="bead-sphere" id="bead-sphere"></div>
+          <div class="bead-glow-ring" id="bead-glow"></div>
+          <div class="bead-aura" id="bead-aura"></div>
+        </div>
+        <div class="bead-meta">
+          <span id="patina-label" class="meta-tag">包浆等级：素珠</span>
+          <span id="days-label" class="meta-tag">累计 1 天</span>
+        </div>
+      </section>
+
+      <!-- Qi-Flux Horoscope -->
+      <section id="qi-section" class="section card fade-section">
+        <h2 class="section-title"><span class="title-icon">⚡</span>气机运势</h2>
+        <div id="radar-chart" class="chart-box"></div>
+        <div id="qi-status" class="qi-status-box">
+          <p id="qi-text" class="qi-text"></p>
+        </div>
+        <div class="advice-grid">
+          <div class="advice-card">
+            <div class="advice-icon">👘</div>
+            <h4 class="advice-title">穿衣</h4>
+            <p class="advice-text" id="advice-clothing"></p>
+          </div>
+          <div class="advice-card">
+            <div class="advice-icon">🍵</div>
+            <h4 class="advice-title">饮食</h4>
+            <p class="advice-text" id="advice-food"></p>
+          </div>
+          <div class="advice-card">
+            <div class="advice-icon">🧘</div>
+            <h4 class="advice-title">情志</h4>
+            <p class="advice-text" id="advice-emotion"></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Micro-Ritual -->
+      <section id="ritual-section" class="section card fade-section">
+        <h2 class="section-title"><span class="title-icon">🌀</span>微仪式</h2>
+        <div class="ritual-options" id="ritual-options">
+          <button class="ritual-card" data-ritual="breathe">
+            <span class="ritual-emoji">🌬️</span>
+            <strong>3分钟呼吸法</strong>
+            <small>顺时呼吸，调和肝气</small>
+          </button>
+          <button class="ritual-card" data-ritual="mindful">
+            <span class="ritual-emoji">📿</span>
+            <strong>5分钟正念盘玩</strong>
+            <small>专注当下，松弛身心</small>
+          </button>
+          <button class="ritual-card" data-ritual="diary">
+            <span class="ritual-emoji">🎙️</span>
+            <strong>情绪语音日记</strong>
+            <small>倾诉释放，化解内耗</small>
+          </button>
+        </div>
+        <div id="ritual-active" class="ritual-active hidden">
+          <div id="ritual-breathe-view" class="ritual-view hidden">
+            <div id="breathe-circle" class="breathe-circle"><span id="breathe-label">吸气</span></div>
+            <div id="breathe-timer" class="timer-text">3:00</div>
+          </div>
+          <div id="ritual-mindful-view" class="ritual-view hidden">
+            <button id="mindful-tap" class="mindful-bead-btn">📿</button>
+            <div id="mindful-count" class="mindful-counter">0</div>
+            <div id="mindful-timer" class="timer-text">5:00</div>
+          </div>
+          <div id="ritual-diary-view" class="ritual-view hidden">
+            <textarea id="diary-input" class="diary-textarea" placeholder="写下此刻的心情……"></textarea>
+            <button id="diary-save" class="btn btn-primary">记录心情</button>
+          </div>
+          <button id="ritual-stop" class="btn btn-outline">结束仪式</button>
+        </div>
+      </section>
+
+      <!-- Healing Pod -->
+      <section id="healing-section" class="section card fade-section">
+        <h2 class="section-title"><span class="title-icon">🏥</span>祝由急救舱</h2>
+        <div class="healing-tabs">
+          <button class="tab-btn active" data-tab="anxiety">职场焦虑</button>
+          <button class="tab-btn" data-tab="insomnia">深夜失眠</button>
+        </div>
+        <div class="healing-player">
+          <div class="healing-ring-wrap">
+            <svg class="healing-ring" viewBox="0 0 120 120">
+              <circle class="ring-bg" cx="60" cy="60" r="54" />
+              <circle class="ring-progress" id="healing-ring-progress" cx="60" cy="60" r="54" />
+            </svg>
+            <div class="healing-timer" id="healing-time">3:00</div>
+          </div>
+          <div class="healing-label" id="healing-label">角音 · 疏肝古琴 · 432Hz</div>
+          <div class="healing-controls">
+            <button id="healing-play" class="btn btn-primary">开始疗愈</button>
+            <button id="healing-stop" class="btn btn-outline hidden">停止</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Emotional Prescription -->
+      <section id="prescription-section" class="section card fade-section">
+        <h2 class="section-title"><span class="title-icon">📜</span>顺时情志方</h2>
+        <div class="rx-scroll">
+          <div class="rx-header" id="rx-title">今日方剂</div>
+          <div class="rx-body" id="rx-body">
+            <p id="rx-content">点击下方按钮，解锁今日盲盒药方</p>
+          </div>
+        </div>
+        <div class="rx-actions">
+          <button id="rx-unlock" class="btn btn-primary">解锁今日方</button>
+          <button id="rx-save" class="btn btn-accent hidden">收下方子</button>
+        </div>
+      </section>
+
+      <!-- Merit Board -->
+      <section id="merit-section" class="section card fade-section">
+        <h2 class="section-title"><span class="title-icon">📿</span>盘珠功德榜</h2>
+        <div class="merit-top">
+          <button id="merit-tap" class="merit-bead-btn">
+            <span class="merit-bead-icon">📿</span>
+            <span>虚拟盘珠</span>
+          </button>
+          <div class="merit-stats">
+            <div class="stat-box">
+              <span class="stat-num" id="merit-personal">0</span>
+              <span class="stat-label">个人功德</span>
+            </div>
+            <div class="stat-box">
+              <span class="stat-num" id="merit-relax">0</span>
+              <span class="stat-label">松弛值</span>
+            </div>
+          </div>
+        </div>
+        <div class="pool-area">
+          <h3 class="pool-title">电子功德圈 · 共振大池</h3>
+          <div class="pool-tank">
+            <div class="pool-water" id="pool-water"></div>
+            <div class="pool-level-text" id="pool-level">0 / 1,000,000</div>
+          </div>
+          <button id="pool-inject" class="btn btn-accent">注入大池</button>
+          <div id="pool-achievement" class="achievement hidden">
+            🎉 解锁集体成就：春分专属白噪音
+          </div>
+        </div>
+      </section>
+
+      <!-- Growth / Patina -->
+      <section id="growth-section" class="section card fade-section">
+        <h2 class="section-title"><span class="title-icon">✨</span>成长包浆</h2>
+        <div class="growth-stages">
+          <div class="stage">
+            <div class="stage-bead wood"><div class="bead-sphere small"></div></div>
+            <span>素珠</span>
+          </div>
+          <div class="stage-arrow">→</div>
+          <div class="stage">
+            <div class="stage-bead warm"><div class="bead-sphere small"></div></div>
+            <span>温润</span>
+          </div>
+          <div class="stage-arrow">→</div>
+          <div class="stage">
+            <div class="stage-bead patina"><div class="bead-sphere small"></div><div class="bead-glow-ring small"></div></div>
+            <span>包浆</span>
+          </div>
+        </div>
+        <div class="growth-bar">
+          <div class="progress-track">
+            <div class="progress-fill" id="growth-fill"></div>
+          </div>
+          <span class="progress-label" id="growth-label">Lv.1 素珠</span>
+        </div>
+        <div id="growth-reward" class="growth-reward hidden">
+          <p>🎁 恭喜达到包浆等级！</p>
+          <div class="coupon" id="coupon-code">TOTEM-XXXX</div>
+          <p class="coupon-hint">凭此优惠码可兑换实体养生雅集门票</p>
+        </div>
+      </section>
+
+      <!-- Weekly Report -->
+      <section id="report-section" class="section card fade-section">
+        <h2 class="section-title"><span class="title-icon">📊</span>心身体度周报</h2>
+        <div id="report-chart" class="chart-box"></div>
+        <div id="report-summary" class="report-summary">
+          <h3>AI 体度总结</h3>
+          <p id="report-ai-text"></p>
+        </div>
+        <div id="report-products" class="product-grid"></div>
+      </section>
+
+      <footer class="app-footer">
+        <p>Digital Totem · 新中式心身疗愈智能手串</p>
+        <p class="footer-sub">顺时调神，欢喜自来</p>
+      </footer>
+
+    </main>
+
+    <!-- ==================== NFC SIMULATOR ==================== -->
+    <div id="nfc-panel" class="nfc-panel">
+      <div class="nfc-header" id="nfc-toggle">
+        <span>🔧 NFC 调谐器</span>
+        <span class="nfc-arrow" id="nfc-arrow">▲</span>
+      </div>
+      <div class="nfc-body" id="nfc-body">
+        <div class="nfc-row">
+          <button id="nfc-tap-btn" class="nfc-tap-btn">碰一碰</button>
+          <span class="nfc-stat">点击: <strong id="nfc-tap-count">0</strong></span>
+        </div>
+        <div class="nfc-row">
+          <span class="nfc-stat">长按: <strong id="nfc-hold-time">0.0</strong>s</span>
+        </div>
+        <div class="nfc-slider">
+          <label>温度: <strong id="nfc-temp-val">25</strong>°C</label>
+          <input type="range" id="nfc-temp" min="-10" max="45" value="25">
+        </div>
+        <div class="nfc-slider">
+          <label>湿度: <strong id="nfc-humid-val">60</strong>%</label>
+          <input type="range" id="nfc-humid" min="0" max="100" value="60">
+        </div>
+        <div class="nfc-info">
+          <div>UID: <span id="nfc-uid">—</span></div>
+          <div>状态: <span id="nfc-status">正常</span></div>
+          <div>包浆: <span id="nfc-patina">Lv.1</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Silent Mode Toggle -->
+    <button id="silent-btn" class="silent-btn" title="长按3秒进入静默模式">
+      <span id="silent-icon">🧘‍♂️</span>
+    </button>
+
+  </div>
+
+  <!-- Scripts -->
+  <script src="js/audio.js"></script>
+  <script src="js/ritual.js"></script>
+  <script src="js/daily.js"></script>
+  <script src="js/social.js"></script>
+  <script src="js/report.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
