@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Digital Totem QR Code</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <style>
+    body {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      min-height: 100vh; margin: 0;
+      background: #FAF7F2; font-family: 'Noto Serif SC', serif; color: #2C2C2C;
+    }
+    h2 { margin-bottom: 8px; color: #4A5D4E; }
+    .url { font-size: 12px; color: #999; margin-bottom: 24px; word-break: break-all; max-width: 400px; text-align: center; }
+    #qr { padding: 20px; background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.1); }
+    .tip { margin-top: 20px; font-size: 14px; color: #B38B6D; }
+  </style>
+</head>
+<body>
+  <h2>Digital Totem · 新中式心身疗愈智能手串</h2>
+  <p class="url">https://chaleswong.github.io/DigitalTotem/demo.html?uid=USER_001</p>
+  <div id="qr"></div>
+  <p class="tip">手机扫码即可体验 ✨</p>
+  <script>
+    new QRCode(document.getElementById('qr'), {
+      text: 'https://chaleswong.github.io/DigitalTotem/demo.html?uid=USER_001',
+      width: 280,
+      height: 280,
+      colorDark: '#2C2C2C',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.H
+    });
+  </script>
+</body>
+</html>

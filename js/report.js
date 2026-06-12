@@ -114,21 +114,20 @@ window.DT.report = (() => {
       days.push(`${d.getMonth()+1}/${d.getDate()}`);
     }
 
-    const isSilent = document.body.classList.contains('silent-mode');
-
+    // v2.0: Always dark theme
     const option = {
       grid: { top: 30, right: 20, bottom: 30, left: 40 },
       xAxis: {
         type: 'category',
         data: days,
-        axisLine: { lineStyle: { color: isSilent ? '#444' : '#ddd' } },
-        axisLabel: { color: isSilent ? '#666' : '#999', fontSize: 11 }
+        axisLine: { lineStyle: { color: 'rgba(255,255,255,0.1)' } },
+        axisLabel: { color: 'rgba(232,224,212,0.5)', fontSize: 11, fontFamily: 'Noto Serif SC, serif' }
       },
       yAxis: {
         type: 'value',
         axisLine: { show: false },
-        splitLine: { lineStyle: { color: isSilent ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)' } },
-        axisLabel: { color: isSilent ? '#666' : '#999', fontSize: 11 }
+        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
+        axisLabel: { color: 'rgba(232,224,212,0.5)', fontSize: 11 }
       },
       series: [{
         data: weeklyTaps,
@@ -136,14 +135,14 @@ window.DT.report = (() => {
         smooth: true,
         symbol: 'circle',
         symbolSize: 8,
-        lineStyle: { color: '#4A5D4E', width: 3 },
-        itemStyle: { color: '#4A5D4E' },
+        lineStyle: { color: '#D4C3A3', width: 3 },
+        itemStyle: { color: '#D4C3A3' },
         areaStyle: {
           color: {
             type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: 'rgba(74,93,78,0.25)' },
-              { offset: 1, color: 'rgba(74,93,78,0)' }
+              { offset: 0, color: 'rgba(212,195,163,0.25)' },
+              { offset: 1, color: 'rgba(212,195,163,0)' }
             ]
           }
         }
@@ -182,7 +181,8 @@ window.DT.report = (() => {
       summary += '继续保持当前的调理节奏，坚持每日微仪式，让松弛感成为生活常态。';
     }
 
-    document.getElementById('report-ai-text').textContent = summary;
+    const el = document.getElementById('report-ai-text');
+    if (el) el.textContent = summary;
   }
 
   function renderProductRecommendations() {
@@ -212,8 +212,9 @@ window.DT.report = (() => {
     }
 
     const container = document.getElementById('report-products');
+    if (!container) return;
     container.innerHTML = `
-      <p style="font-size:0.85rem;color:#999;margin-bottom:10px;">AI 精准推荐 · 两件打包立减20元</p>
+      <p style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:10px;">AI 精准推荐 · 两件打包立减20元</p>
       ${products.map(p => `
         <div class="product-card">
           <div class="product-img">${p.emoji}</div>
@@ -224,7 +225,7 @@ window.DT.report = (() => {
           <div class="product-price">${p.price}</div>
         </div>
       `).join('')}
-      <button class="btn btn-accent" style="width:100%;margin-top:10px;">一键混合下单</button>
+      <button class="btn-primary" style="width:100%;margin-top:10px;">一键混合下单</button>
     `;
   }
 

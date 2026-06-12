@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Digital Totem 诊断页</title>
+  <style>
+    body { font-family: system-ui; background: #0d0d0d; color: #e8e0d4; max-width: 700px; margin: 40px auto; padding: 20px; }
+    h1 { color: #d4c3a3; }
+    .ok { color: #5a8f6e; } .fail { color: #c25b56; } .warn { color: #d4c3a3; }
+    pre { background: rgba(255,255,255,0.04); padding: 12px; border-radius: 8px; font-size: 0.8rem; overflow-x: auto; white-space: pre-wrap; }
+    button { background: #d4c3a3; color: #0d0d0d; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 600; margin: 8px 4px; }
+    #log { min-height: 200px; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Digital Totem 诊断</h1>
+  <button onclick="runDiag()">运行诊断</button>
+  <button onclick="resetState()">重置 localStorage</button>
+  <button onclick="forceShowMain()">强制显示主界面</button>
+  <pre id="log">点击"运行诊断"开始...</pre>
+
+<script>
+function log(msg, type='info') {
+  const el = document.getElementById('log');
+  const prefix = type === 'ok' ? '✅' : type === 'fail' ? '❌' : type === 'warn' ? '⚠️' : 'ℹ️';
+  el.textContent += `${prefix} ${msg}\n`;
+}
+
+function runDiag() {
+  document.getElementById('log').textContent = '';
+  
+  // 1. localStorage
+  log('=== 1. localStorage 状态 ===');
+  const raw = localStorage.getItem('dt_state');
+  if (raw) {
+    try {
+      const state = JSON.parse(raw);
+      log(`initialized: ${state.initialized}`, state.initialized ? 'ok' : 'warn');
+      log(`constitution: ${state.constitution || '未设置'}`, state.constitution ? 'ok' : 'warn');
+      log(`petName: ${state.petName || '未设置'}`);
+      log(`uid: ${state.uid || '未设置'}`);
+    } catch(e) { log('localStorage 解析失败: ' + e, 'fail'); }
+  } else {
+    log('dt_state 不存在（首次访问）', 'warn');
+  }
+
+  // 2. DOM 元素
+  log('\n=== 2. DOM 元素检查 ===');
+  const checks = [
+    ['onboarding-overlay', '新手引导层'],
+    ['main-content', '主内容区'],
+    ['pet-stage', '灵宠舞台'],
+    ['pet-static-img', '灵宠图片'],
+    ['chat-sheet', '聊天面板'],
+    ['nfc-panel', 'NFC面板'],
+    ['qi-section', '气机运势'],
+    ['healing-section', '祝由急救舱'],
+    ['merit-section', '功德榜']
+  ];
+  checks.forEach(([id, name]) => {
+    const el = document.getElementById(id);
+    if (!el) { log(`${name} (#${id}): 不存在!`, 'fail'); return; }
+    const hidden = el.classList.contains('hidden');
+    const display = getComputedStyle(el).display;
+    log(`${name} (#${id}): ${hidden ? 'hidden类' : '无hidden类'}, display=${display}`, hidden || display==='none' ? 'warn' : 'ok');
+  });
+
+  // 3. JS 模块
+  log('\n=== 3. JS 模块加载 ===');
+  const modules = ['DT.pet', 'DT.chat', 'DT.ritual', 'DT.daily', 'DT.social', 'DT.report', 'DT.audio'];
+  modules.forEach(m => {
+    const parts = m.split('.');
+    let obj = window;
+    parts.forEach(p => { obj = obj && obj[p]; });
+    log(`${m}: ${obj ? '已加载' : '未加载!'}`, obj ? 'ok' : 'fail');
+  });
+
+  // 4. DT.pet.getPetData
+  log('\n=== 4. 灵宠数据 ===');
+  if (window.DT && DT.pet && DT.pet.getPetData) {
+    try {
+      const pet = DT.pet.getPetData('气郁质');
+      log(`getPetData('气郁质'): ${pet ? pet.name : 'null'}`, pet ? 'ok' : 'fail');
+      if (pet && pet.img) log(`img: ${pet.img}`, 'ok');
+    } catch(e) { log('getPetData 报错: ' + e.message, 'fail'); }
+  }
+
+  // 5. API 连通
+  log('\n=== 5. 后端 API ===');
+  if (window.DT && DT.chat) {
+    log(`isBackendConfigured: ${DT.chat.isBackendConfigured()}`, DT.chat.isBackendConfigured() ? 'ok' : 'warn');
+    if (DT.chat.getStatus) log(`status: ${JSON.stringify(DT.chat.getStatus())}`);
+  }
+
+  // 6. CORS 测试
+  log('\n=== 6. CORS 测试 ===');
+  fetch('https://7f50edaa-9bdb-4e88-beea-dbb364ef08fa.dev.coze.site/api/lingchong/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: 'test', user_id: 'diag' })
+  }).then(r => {
+    log(`HTTP ${r.status} ${r.statusText}`, r.ok ? 'ok' : 'fail');
+    return r.text();
+  }).then(t => {
+    log(`Response: ${t.substring(0, 200)}`);
+  }).catch(e => {
+    log(`CORS/网络错误: ${e.message}`, 'fail');
+  });
+
+  // 7. 图片加载
+  log('\n=== 7. 灵宠图片 ===');
+  ['pet_wood.png', 'pet_fire.png', 'pet_earth.png', 'pet_metal.png', 'pet_water.png'].forEach(f => {
+    const img = new Image();
+    img.onload = () => log(`img/${f}: ${img.width}x${img.height}`, 'ok');
+    img.onerror = () => log(`img/${f}: 加载失败!`, 'fail');
+    img.src = `img/${f}`;
+  });
+}
+
+function resetState() {
+  localStorage.removeItem('dt_state');
+  log('\nlocalStorage 已清除，请刷新 demo.html', 'ok');
+}
+
+function forceShowMain() {
+  localStorage.setItem('dt_state', JSON.stringify({
+    initialized: true, constitution: '气郁质',
+    petName: '疏影墨灵', petElement: '木', petColor: '#5A8F6E'
+  }));
+  log('\n已强制设置状态，请打开 demo.html', 'ok');
+}
+</script>
+</body>
+</html>

@@ -1,5 +1,11 @@
 /* ============================================================
-   Digital Totem — Social Layer (功德榜 / 包浆成长)
+   Digital Totem v2.0 — Social Layer (功德榜 / 包浆成长)
+   ============================================================
+   职责：
+   - 盘珠功德计数 + 放松指数
+   - 功德池（社区汇流）
+   - 包浆成长三阶段
+   - 灵宠念珠联动
    ============================================================ */
 window.DT = window.DT || {};
 
@@ -26,55 +32,76 @@ window.DT.social = (() => {
     updatePoolDisplay();
 
     // Tap button
-    document.getElementById('merit-tap').addEventListener('click', () => {
-      DT.state.meritCount = (DT.state.meritCount || 0) + 1;
-      DT.state.relaxScore = (DT.state.relaxScore || 0) + Math.ceil(Math.random() * 3);
-      DT.state.dailyTaps = (DT.state.dailyTaps || 0) + 1;
-      DT.save();
-      updateMeritDisplay();
-      DT.audio.playTick();
-      DT.audio.vibrate(25);
+    const tapBtn = document.getElementById('merit-tap');
+    if (tapBtn) {
+      tapBtn.addEventListener('click', () => {
+        DT.state.meritCount = (DT.state.meritCount || 0) + 1;
+        DT.state.relaxScore = (DT.state.relaxScore || 0) + Math.ceil(Math.random() * 3);
+        DT.state.dailyTaps = (DT.state.dailyTaps || 0) + 1;
 
-      // Bump animation
-      const el = document.getElementById('merit-personal');
-      el.classList.remove('bump');
-      void el.offsetWidth; // reflow
-      el.classList.add('bump');
-    });
+        // 灵宠念珠联动
+        DT.state.rosaryScore = Math.min(100, (DT.state.rosaryScore || 0) + 1);
+        if (DT.pet && DT.pet.addRosary) DT.pet.addRosary(1);
+
+        DT.save();
+        updateMeritDisplay();
+
+        if (DT.audio && DT.audio.playTick) DT.audio.playTick();
+        if (DT.audio && DT.audio.vibrate) DT.audio.vibrate(25);
+
+        // Bump animation
+        const el = document.getElementById('merit-personal');
+        if (el) {
+          el.classList.remove('bump');
+          void el.offsetWidth; // reflow
+          el.classList.add('bump');
+        }
+      });
+    }
 
     // Inject to pool
-    document.getElementById('pool-inject').addEventListener('click', () => {
-      const personal = DT.state.meritCount || 0;
-      if (personal <= 0) return;
+    const injectBtn = document.getElementById('pool-inject');
+    if (injectBtn) {
+      injectBtn.addEventListener('click', () => {
+        const personal = DT.state.meritCount || 0;
+        if (personal <= 0) return;
 
-      const contribute = Math.min(personal, 100);
-      DT.state.meritCount -= contribute;
-      DT.state.poolContributed = (DT.state.poolContributed || 0) + contribute;
-      poolTotal += contribute;
-      DT.save();
+        const contribute = Math.min(personal, 100);
+        DT.state.meritCount -= contribute;
+        DT.state.poolContributed = (DT.state.poolContributed || 0) + contribute;
+        poolTotal += contribute;
+        DT.save();
 
-      updateMeritDisplay();
-      updatePoolDisplay();
+        updateMeritDisplay();
+        updatePoolDisplay();
 
-      // Check achievement
-      if (poolTotal >= POOL_GOAL) {
-        document.getElementById('pool-achievement').classList.remove('hidden');
-      }
+        // Check achievement
+        if (poolTotal >= POOL_GOAL) {
+          const achieveEl = document.getElementById('pool-achievement');
+          if (achieveEl) {
+            achieveEl.classList.remove('hidden');
+            achieveEl.innerHTML = '🎉 功德圆满！社区目标已达成';
+          }
+        }
 
-      DT.audio.playTick();
-    });
+        if (DT.audio && DT.audio.playTick) DT.audio.playTick();
+      });
+    }
   }
 
   function updateMeritDisplay() {
-    document.getElementById('merit-personal').textContent = DT.state.meritCount || 0;
-    document.getElementById('merit-relax').textContent = DT.state.relaxScore || 0;
+    const personal = document.getElementById('merit-personal');
+    const relax = document.getElementById('merit-relax');
+    if (personal) personal.textContent = DT.state.meritCount || 0;
+    if (relax) relax.textContent = DT.state.relaxScore || 0;
   }
 
   function updatePoolDisplay() {
     const pct = Math.min((poolTotal / POOL_GOAL) * 100, 100);
-    document.getElementById('pool-water').style.height = pct + '%';
-    document.getElementById('pool-level').textContent =
-      `${poolTotal.toLocaleString()} / ${POOL_GOAL.toLocaleString()}`;
+    const water = document.getElementById('pool-water');
+    const level = document.getElementById('pool-level');
+    if (water) water.style.height = pct + '%';
+    if (level) level.textContent = `${poolTotal.toLocaleString()} / ${POOL_GOAL.toLocaleString()}`;
   }
 
   /* ============================================================
@@ -82,7 +109,6 @@ window.DT.social = (() => {
      ============================================================ */
   function initGrowth() {
     updatePatinaLevel();
-    updateBeadVisual();
     updateGrowthBar();
   }
 
@@ -94,35 +120,15 @@ window.DT.social = (() => {
       if (totalMerit >= p.minMerit) newLevel = p.level;
     }
     DT.state.patinaLevel = newLevel;
+
+    // Update NFC panel patina display
+    const patinaEl = document.getElementById('nfc-patina');
+    if (patinaEl) {
+      const patinaInfo = PATINA_LEVELS.find(p => p.level === newLevel);
+      patinaEl.textContent = `Lv.${newLevel} ${patinaInfo.name}`;
+    }
+
     DT.save();
-  }
-
-  function updateBeadVisual() {
-    const level = DT.state.patinaLevel || 1;
-    const sphere = document.getElementById('bead-sphere');
-    const glow = document.getElementById('bead-glow');
-    const aura = document.getElementById('bead-aura');
-
-    sphere.className = 'bead-sphere';
-    glow.className = 'bead-glow-ring';
-    aura.className = 'bead-aura';
-
-    if (level >= 2) {
-      sphere.classList.add('level-2');
-    }
-    if (level >= 3) {
-      sphere.classList.add('level-3');
-      glow.classList.add('visible');
-      aura.classList.add('visible');
-    }
-
-    // Labels
-    const patinaInfo = PATINA_LEVELS.find(p => p.level === level);
-    document.getElementById('patina-label').textContent = `包浆等级：${patinaInfo.name}`;
-    document.getElementById('days-label').textContent = `累计 ${DT.state.totalDays || 1} 天`;
-
-    // NFC panel
-    document.getElementById('nfc-patina').textContent = `Lv.${level} ${patinaInfo.name}`;
   }
 
   function updateGrowthBar() {
@@ -136,8 +142,10 @@ window.DT.social = (() => {
       pct = Math.min(((totalMerit - current.minMerit) / (next.minMerit - current.minMerit)) * 100, 100);
     }
 
-    document.getElementById('growth-fill').style.width = pct + '%';
-    document.getElementById('growth-label').textContent = `Lv.${level} ${current.name}`;
+    const fill = document.getElementById('growth-fill');
+    const label = document.getElementById('growth-label');
+    if (fill) fill.style.width = pct + '%';
+    if (label) label.textContent = `${current.name}阶段 · ${Math.round(pct)}%`;
 
     // Stage highlights
     document.querySelectorAll('.stage').forEach((el, i) => {
@@ -146,9 +154,8 @@ window.DT.social = (() => {
 
     // Coupon for level 3
     if (level >= 3) {
-      document.getElementById('growth-reward').classList.remove('hidden');
-      document.getElementById('coupon-code').textContent =
-        'TOTEM-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+      const reward = document.getElementById('growth-reward');
+      if (reward) reward.classList.remove('hidden');
     }
   }
 
@@ -157,7 +164,6 @@ window.DT.social = (() => {
     updatePatinaLevel();
     updateMeritDisplay();
     updatePoolDisplay();
-    updateBeadVisual();
     updateGrowthBar();
   }
 

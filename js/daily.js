@@ -95,9 +95,10 @@ window.DT.daily = (() => {
     const humid = DT.state.weatherHumid || 60;
 
     // Set dates
-    document.getElementById('solar-date').textContent =
-      `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日`;
-    document.getElementById('lunar-date').textContent = getApproxLunarDate(now);
+    const solarEl = document.getElementById('solar-date');
+    if (solarEl) solarEl.textContent = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日`;
+    const lunarEl = document.getElementById('lunar-date');
+    if (lunarEl) lunarEl.textContent = getApproxLunarDate(now);
 
     // Find matching template
     const tpl = QI_TEMPLATES.find(t => t.condition(ganzhi.element, temp, humid));
@@ -105,21 +106,41 @@ window.DT.daily = (() => {
                               .replace('{temp}', temp)
                               .replace('{humid}', humid);
 
-    document.getElementById('qi-text').textContent = fillText(tpl.text);
-    document.getElementById('advice-clothing').textContent = tpl.clothing;
-    document.getElementById('advice-food').textContent = tpl.food;
-    document.getElementById('advice-emotion').textContent = tpl.emotion;
+    const qiText = document.getElementById('qi-text');
+    if (qiText) qiText.textContent = fillText(tpl.text);
 
-    // Energy bar
-    const strip = document.getElementById('energy-strip');
-    strip.style.background = ELEMENT_COLORS[ganzhi.element] || '#4A5D4E';
-    document.getElementById('energy-value').textContent =
-      `${ganzhi.element}气${ganzhi.element === '木' ? '旺盛' : ganzhi.element === '火' ? '炎上' : ganzhi.element === '水' ? '寒凝' : ganzhi.element === '金' ? '肃降' : '平和'}`;
+    // Advice cards — query child .advice-text
+    const clothingEl = document.getElementById('advice-clothing');
+    if (clothingEl) {
+      const textEl = clothingEl.querySelector('.advice-text');
+      if (textEl) textEl.textContent = tpl.clothing;
+    }
+    const foodEl = document.getElementById('advice-food');
+    if (foodEl) {
+      const textEl = foodEl.querySelector('.advice-text');
+      if (textEl) textEl.textContent = tpl.food;
+    }
+    const emotionEl = document.getElementById('advice-emotion');
+    if (emotionEl) {
+      const textEl = emotionEl.querySelector('.advice-text');
+      if (textEl) textEl.textContent = tpl.emotion;
+    }
 
     // Greeting
     const hour = now.getHours();
     let greetTime = hour < 6 ? '夜深了' : hour < 12 ? '晨安' : hour < 18 ? '午安' : '晚安';
-    document.getElementById('greeting-text').textContent = `${greetTime}，顺时调神，欢喜自来`;
+    const greetEl = document.getElementById('greeting-text');
+    if (greetEl) greetEl.textContent = `${greetTime}，顺时调神，欢喜自来`;
+
+    // Update stress for pet
+    if (DT.state && DT.pet && DT.pet.updateMorph) {
+      // Element-weather interaction affects stress
+      let stressAdj = 0;
+      if (ganzhi.element === '木' && humid > 70) stressAdj = 10;
+      if (ganzhi.element === '火' && temp > 30) stressAdj = 8;
+      if (ganzhi.element === '水' && temp < 10) stressAdj = 5;
+      DT.state.stressScore = Math.min(100, (DT.state.stressScore || 50) + stressAdj);
+    }
 
     // Radar chart
     renderRadarChart(ganzhi.element, temp, humid);
@@ -147,8 +168,7 @@ window.DT.daily = (() => {
     if (temp > 30) values[1] = Math.min(100, values[1] + 10);
     if (temp < 10) values[4] = Math.min(100, values[4] + 10);
 
-    const isSilent = document.body.classList.contains('silent-mode');
-
+    // v2.0: Always dark theme
     const option = {
       radar: {
         indicator: [
@@ -161,15 +181,13 @@ window.DT.daily = (() => {
         shape: 'circle',
         splitNumber: 4,
         axisName: {
-          color: isSilent ? '#888' : '#4A5D4E',
+          color: '#D4C3A3',
           fontSize: 14,
           fontFamily: 'Noto Serif SC, serif'
         },
-        splitLine: { lineStyle: { color: isSilent ? 'rgba(255,255,255,0.06)' : 'rgba(74,93,78,0.1)' } },
-        splitArea: { areaStyle: { color: isSilent
-          ? ['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.04)']
-          : ['rgba(74,93,78,0.02)', 'rgba(74,93,78,0.05)'] } },
-        axisLine: { lineStyle: { color: isSilent ? 'rgba(255,255,255,0.08)' : 'rgba(74,93,78,0.15)' } }
+        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.06)' } },
+        splitArea: { areaStyle: { color: ['rgba(255,255,255,0.02)', 'rgba(255,255,255,0.04)'] } },
+        axisLine: { lineStyle: { color: 'rgba(255,255,255,0.08)' } }
       },
       series: [{
         type: 'radar',
@@ -217,8 +235,10 @@ window.DT.daily = (() => {
       });
     });
 
-    document.getElementById('healing-play').addEventListener('click', startHealing);
-    document.getElementById('healing-stop').addEventListener('click', stopHealing);
+    const playBtn = document.getElementById('healing-play');
+    const stopBtn = document.getElementById('healing-stop');
+    if (playBtn) playBtn.addEventListener('click', startHealing);
+    if (stopBtn) stopBtn.addEventListener('click', stopHealing);
   }
 
   function updateHealingLabel() {
@@ -230,25 +250,30 @@ window.DT.daily = (() => {
 
   function startHealing() {
     healingRemaining = healingTotal;
-    document.getElementById('healing-play').classList.add('hidden');
-    document.getElementById('healing-stop').classList.remove('hidden');
+    const playBtn = document.getElementById('healing-play');
+    const stopBtn = document.getElementById('healing-stop');
+    if (playBtn) playBtn.classList.add('hidden');
+    if (stopBtn) stopBtn.classList.remove('hidden');
 
-    if (currentTab === 'anxiety') {
-      DT.audio.playGuqin(healingTotal);
-    } else {
-      DT.audio.playSingingBowl(healingTotal);
+    if (DT.audio) {
+      if (currentTab === 'anxiety' && DT.audio.playGuqin) {
+        DT.audio.playGuqin(healingTotal);
+      } else if (DT.audio.playSingingBowl) {
+        DT.audio.playSingingBowl(healingTotal);
+      }
     }
 
     const circumference = 2 * Math.PI * 54;
-    const ring = document.getElementById('healing-ring-progress');
-    ring.style.strokeDashoffset = '0';
+    const ring = document.querySelector('.ring-progress');
+    if (ring) ring.style.strokeDashoffset = '0';
 
     healingTimer = setInterval(() => {
       healingRemaining--;
-      document.getElementById('healing-time').textContent = formatTime(healingRemaining);
+      const timeEl = document.getElementById('healing-time');
+      if (timeEl) timeEl.textContent = formatTime(healingRemaining);
 
       const pct = 1 - (healingRemaining / healingTotal);
-      ring.style.strokeDashoffset = (circumference * pct).toString();
+      if (ring) ring.style.strokeDashoffset = (circumference * pct).toString();
 
       if (healingRemaining <= 0) stopHealing();
     }, 1000);
@@ -256,15 +281,19 @@ window.DT.daily = (() => {
 
   function stopHealing() {
     if (healingTimer) { clearInterval(healingTimer); healingTimer = null; }
-    DT.audio.stopAll();
+    if (DT.audio && DT.audio.stopAll) DT.audio.stopAll();
     resetHealingUI();
   }
 
   function resetHealingUI() {
-    document.getElementById('healing-play').classList.remove('hidden');
-    document.getElementById('healing-stop').classList.add('hidden');
-    document.getElementById('healing-time').textContent = '3:00';
-    document.getElementById('healing-ring-progress').style.strokeDashoffset = '0';
+    const playBtn = document.getElementById('healing-play');
+    const stopBtn = document.getElementById('healing-stop');
+    const timeEl = document.getElementById('healing-time');
+    const ring = document.querySelector('.ring-progress');
+    if (playBtn) playBtn.classList.remove('hidden');
+    if (stopBtn) stopBtn.classList.add('hidden');
+    if (timeEl) timeEl.textContent = '3:00';
+    if (ring) ring.style.strokeDashoffset = '0';
     healingRemaining = healingTotal;
   }
 
@@ -303,8 +332,10 @@ window.DT.daily = (() => {
   ];
 
   function initPrescription() {
-    document.getElementById('rx-unlock').addEventListener('click', unlockPrescription);
-    document.getElementById('rx-save').addEventListener('click', savePrescriptionCard);
+    const unlockBtn = document.getElementById('rx-unlock');
+    const saveBtn = document.getElementById('rx-save');
+    if (unlockBtn) unlockBtn.addEventListener('click', unlockPrescription);
+    if (saveBtn) saveBtn.addEventListener('click', savePrescriptionCard);
   }
 
   function unlockPrescription() {
@@ -321,10 +352,12 @@ window.DT.daily = (() => {
 
     document.getElementById('rx-title').textContent = rx.title;
     document.getElementById('rx-content').textContent = rx.content;
-    document.getElementById('rx-unlock').classList.add('hidden');
-    document.getElementById('rx-save').classList.remove('hidden');
+    const unlockBtn = document.getElementById('rx-unlock');
+    const saveBtn = document.getElementById('rx-save');
+    if (unlockBtn) unlockBtn.classList.add('hidden');
+    if (saveBtn) saveBtn.classList.remove('hidden');
 
-    DT.audio.playTick();
+    if (DT.audio && DT.audio.playTick) DT.audio.playTick();
   }
 
   function savePrescriptionCard() {
@@ -423,9 +456,7 @@ window.DT.daily = (() => {
   }
 
   /* --- Update Qi on weather change --- */
-  function onWeatherChange(temp, humid) {
-    DT.state.weatherTemp = temp;
-    DT.state.weatherHumid = humid;
+  function onWeatherChange() {
     DT.save();
     initQiFlux();
   }

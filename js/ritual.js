@@ -1,348 +1,445 @@
 /* ============================================================
-   Digital Totem — Ritual Layer (认主仪式 / 微仪式 / SOS)
+   Digital Totem v2.0 — 认主仪式 & 微仪式模块 (Ritual Module)
+   ============================================================
+   职责：
+   - 新手引导流程（碰一碰 → 情志问卷 → 灵宠觉醒）
+   - 三大微仪式（呼吸 / 正念盘珠 / 心语日记）
+   - SOS 紧急安抚舱
    ============================================================ */
 window.DT = window.DT || {};
 
 window.DT.ritual = (() => {
-  /* --- Onboarding Questions --- */
+  'use strict';
+
+  /* ============================================================
+     情志问卷题库 — 3 题快速体质评估
+     ============================================================ */
   const QUESTIONS = [
     {
-      text: '此时此刻，你的气结在哪里？',
+      q: '最近一周，你最常感受到的身体不适是？',
       options: [
-        { label: '胸口发闷', value: 'chest' },
-        { label: '沉在小腹', value: 'belly' },
-        { label: '太阳穴胀痛', value: 'temple' },
-        { label: '说不清，整个人都紧', value: 'all' }
+        { text: '胸口发闷，总想叹气', score: { '气郁质': 3 } },
+        { text: '太阳穴胀痛，口干', score: { '阴虚质': 3 } },
+        { text: '全身紧绷，肩颈酸痛', score: { '气虚质': 2, '气郁质': 1 } },
+        { text: '小腹沉重，四肢困倦', score: { '湿热质': 3 } },
+        { text: '没有明显不适', score: { '平和质': 3 } }
       ]
     },
     {
-      text: '最近一周，你的睡眠质量如何？',
+      q: '你的睡眠质量如何？',
       options: [
-        { label: '入睡困难，辗转反侧', value: 'hard_sleep' },
-        { label: '多梦易醒', value: 'light_sleep' },
-        { label: '还行，偶尔失眠', value: 'ok_sleep' },
-        { label: '一沾枕头就着', value: 'good_sleep' }
+        { text: '入睡困难，脑子停不下来', score: { '气郁质': 2, '阴虚质': 1 } },
+        { text: '多梦易醒，醒后疲惫', score: { '湿热质': 2, '阴虚质': 1 } },
+        { text: '偶尔失眠，总体还行', score: { '气虚质': 2 } },
+        { text: '睡眠质量不错', score: { '平和质': 3 } }
       ]
     },
     {
-      text: '当下你最想要什么？',
+      q: '面对职场压力时，你的典型反应是？',
       options: [
-        { label: '安静地独处片刻', value: 'alone' },
-        { label: '有人告诉我"没关系"', value: 'comfort' },
-        { label: '痛快地发泄一场', value: 'release' },
-        { label: '什么都不想要，就想歇会儿', value: 'rest' }
+        { text: '内心翻涌，但表面镇定', score: { '气郁质': 3 } },
+        { text: '容易急躁上火', score: { '阴虚质': 2, '湿热质': 1 } },
+        { text: '感到虚脱无力', score: { '气虚质': 3 } },
+        { text: '基本能从容应对', score: { '平和质': 3 } }
       ]
     }
   ];
 
-  const CONSTITUTIONS = {
-    'chest_hard_sleep': { type: '气郁质', desc: '肝气郁结，情志不舒', color: '#4A5D4E' },
-    'belly_light_sleep': { type: '湿热质', desc: '脾湿内蕴，热气缠身', color: '#B38B6D' },
-    'temple_hard_sleep': { type: '阴虚质', desc: '阴液亏虚，虚火上炎', color: '#C25B56' },
-    'all_ok_sleep': { type: '气虚质', desc: '元气不足，倦怠乏力', color: '#8B9EA8' },
-    'default': { type: '平和质', desc: '阴阳调和，气血充盈', color: '#D4C3A3' }
-  };
+  let answers = {};
 
-  let currentQuestion = 0;
-  let answers = [];
-
-  /* --- Determine constitution from answers --- */
-  function getConstitution(ans) {
-    const key = (ans[0] || '') + '_' + (ans[1] || '');
-    return CONSTITUTIONS[key] || CONSTITUTIONS['default'];
-  }
-
-  /* --- Show Onboarding --- */
+  /* ============================================================
+     1. showOnboarding() — 展示新手引导
+     ============================================================ */
   function showOnboarding() {
     const overlay = document.getElementById('onboarding-overlay');
+    if (!overlay) return;
+
     overlay.classList.remove('hidden');
-    currentQuestion = 0;
-    answers = [];
+    showStep(1);
 
-    // Step 1: Touch the bead
-    document.getElementById('onboard-touch-btn').addEventListener('click', () => {
-      DT.audio.vibrate(100);
-      DT.audio.playTick();
-      goToStep(2);
-    }, { once: true });
+    // 步骤一：唤醒灵宠按钮
+    const touchBtn = document.getElementById('onboard-touch-btn');
+    if (touchBtn) {
+      touchBtn.addEventListener('click', () => {
+        if (DT.audio && DT.audio.playSingingBowl) DT.audio.playSingingBowl();
+        if (DT.audio && DT.audio.vibrate) DT.audio.vibrate();
+        showStep(2);
+        renderQuestions();
+      }, { once: true });
+    }
 
-    // Step 3: Enter
-    document.getElementById('onboard-enter-btn').addEventListener('click', () => {
-      const constitution = getConstitution(answers);
-      DT.state.initialized = true;
-      DT.state.constitution = constitution.type;
-      DT.state.lastVisit = new Date().toDateString();
-      DT.save();
-
-      overlay.classList.add('fade-out');
-      setTimeout(() => {
+    // 步骤三：进入结界按钮
+    const enterBtn = document.getElementById('onboard-enter-btn');
+    if (enterBtn) {
+      enterBtn.addEventListener('click', () => {
+        DT.state.initialized = true;
+        DT.save();
         overlay.classList.add('hidden');
-        overlay.classList.remove('fade-out');
         DT.showMain();
-      }, 600);
-    }, { once: true });
-  }
-
-  function goToStep(step) {
-    document.querySelectorAll('.onboard-step').forEach(s => s.classList.remove('active'));
-    document.getElementById('onboard-step-' + step).classList.add('active');
-
-    if (step === 2) {
-      renderQuestion();
+      }, { once: true });
     }
-    if (step === 3) {
-      const constitution = getConstitution(answers);
-      document.getElementById('onboard-result').textContent =
-        `你的初始体质: ${constitution.type} — ${constitution.desc}`;
-      // AI voice greeting
-      setTimeout(() => {
-        DT.audio.speak('结界已开，顺时调神，欢喜自来');
-      }, 500);
-    }
-  }
-
-  function renderQuestion() {
-    const container = document.getElementById('onboard-questions');
-    const q = QUESTIONS[currentQuestion];
-    if (!q) { goToStep(3); return; }
-
-    container.innerHTML = `
-      <div class="question-card">
-        <p>${currentQuestion + 1}/3 · ${q.text}</p>
-        <div class="question-options">
-          ${q.options.map((o, i) => `
-            <label>
-              <input type="radio" name="q${currentQuestion}" value="${o.value}">
-              ${o.label}
-            </label>
-          `).join('')}
-        </div>
-        <button class="btn btn-primary question-next" id="q-next" ${currentQuestion >= QUESTIONS.length ? '' : ''}>
-          ${currentQuestion < QUESTIONS.length - 1 ? '下一题' : '完成评估'}
-        </button>
-      </div>
-    `;
-
-    document.getElementById('q-next').addEventListener('click', () => {
-      const selected = container.querySelector(`input[name="q${currentQuestion}"]:checked`);
-      answers.push(selected ? selected.value : 'default');
-      currentQuestion++;
-      renderQuestion();
-    }, { once: true });
   }
 
   /* ============================================================
-     MICRO-RITUAL SYSTEM
+     步骤切换
      ============================================================ */
-  let ritualTimer = null;
-  let breatheInterval = null;
+  function showStep(num) {
+    document.querySelectorAll('.onboard-step').forEach(s => {
+      s.classList.remove('active');
+    });
+    const step = document.getElementById(`onboard-step-${num}`);
+    if (step) step.classList.add('active');
+  }
+
+  /* ============================================================
+     渲染问卷
+     ============================================================ */
+  function renderQuestions() {
+    const container = document.getElementById('onboard-questions');
+    if (!container) return;
+
+    container.innerHTML = '';
+    answers = {};
+
+    QUESTIONS.forEach((q, idx) => {
+      const card = document.createElement('div');
+      card.className = 'question-card';
+      card.innerHTML = `
+        <p class="question-title">${idx + 1}. ${q.q}</p>
+        <div class="question-options" data-q="${idx}"></div>
+      `;
+
+      const optContainer = card.querySelector('.question-options');
+      q.options.forEach((opt, optIdx) => {
+        const btn = document.createElement('button');
+        btn.className = 'question-opt';
+        btn.textContent = opt.text;
+        btn.addEventListener('click', () => {
+          // 选中效果
+          optContainer.querySelectorAll('.question-opt').forEach(b => b.classList.remove('selected'));
+          btn.classList.add('selected');
+          answers[idx] = opt.score;
+
+          // 音效
+          if (DT.audio && DT.audio.playTick) DT.audio.playTick();
+
+          // 检查是否全部回答完毕
+          if (Object.keys(answers).length === QUESTIONS.length) {
+            setTimeout(() => {
+              const constitution = calculateConstitution();
+              revealPet(constitution);
+            }, 500);
+          }
+        });
+        optContainer.appendChild(btn);
+      });
+
+      container.appendChild(card);
+    });
+  }
+
+  /* ============================================================
+     计算体质
+     ============================================================ */
+  function calculateConstitution() {
+    const scores = {};
+    Object.values(answers).forEach(scoreMap => {
+      Object.entries(scoreMap).forEach(([type, val]) => {
+        scores[type] = (scores[type] || 0) + val;
+      });
+    });
+
+    let maxType = '平和质';
+    let maxScore = 0;
+    Object.entries(scores).forEach(([type, score]) => {
+      if (score > maxScore) {
+        maxScore = score;
+        maxType = type;
+      }
+    });
+
+    return maxType;
+  }
+
+  /* ============================================================
+     灵宠揭示（步骤三）
+     ============================================================ */
+  function revealPet(constitution) {
+    const pet = DT.pet ? DT.pet.getPetData(constitution) : null;
+    if (!pet) {
+      showStep(3);
+      return;
+    }
+
+    // 保存到状态
+    DT.state.constitution = constitution;
+    DT.state.petName = pet.name;
+    DT.state.petElement = pet.element;
+    DT.state.petColor = pet.color;
+    DT.save();
+
+    // 填充 UI
+    const img = document.getElementById('pet-reveal-img');
+    if (img) img.src = pet.img;
+
+    const name = document.getElementById('pet-reveal-name');
+    if (name) name.textContent = pet.name;
+
+    const elem = document.getElementById('pet-reveal-element');
+    if (elem) elem.textContent = `${pet.element}属性 · ${pet.beast}`;
+
+    const desc = document.getElementById('pet-reveal-desc');
+    if (desc) desc.textContent = pet.desc;
+
+    // 切换到步骤三
+    showStep(3);
+
+    // 播放颂钵
+    if (DT.audio && DT.audio.playSingingBowl) DT.audio.playSingingBowl();
+  }
+
+  /* ============================================================
+     2. initRituals() — 初始化微仪式
+     ============================================================ */
+  let breatheTimer = null;
+  let breatheSeconds = 0;
+  let mindfulCount = 0;
+  let activeRitual = null;
 
   function initRituals() {
-    // Ritual option cards
-    document.querySelectorAll('.ritual-card').forEach(card => {
+    const options = document.getElementById('ritual-options');
+    const active = document.getElementById('ritual-active');
+    const stopBtn = document.getElementById('ritual-stop');
+
+    if (!options) return;
+
+    // 仪式选择按钮
+    options.querySelectorAll('.ritual-card').forEach(card => {
       card.addEventListener('click', () => {
         const type = card.dataset.ritual;
         startRitual(type);
       });
     });
 
-    // Stop button
-    document.getElementById('ritual-stop').addEventListener('click', stopRitual);
-
-    // Mindful tap
-    document.getElementById('mindful-tap').addEventListener('click', () => {
-      const countEl = document.getElementById('mindful-count');
-      let c = parseInt(countEl.textContent) + 1;
-      countEl.textContent = c;
-      DT.audio.playTick();
-      DT.audio.vibrate(30);
-    });
-
-    // Diary save
-    document.getElementById('diary-save').addEventListener('click', () => {
-      const text = document.getElementById('diary-input').value.trim();
-      if (text) {
-        DT.state.weeklyEmotions = DT.state.weeklyEmotions || [];
-        DT.state.weeklyEmotions.push({ text, time: Date.now() });
-        DT.save();
-        document.getElementById('diary-input').value = '';
-        alert('心情已记录 🍃');
-      }
-    });
+    // 停止按钮
+    if (stopBtn) {
+      stopBtn.addEventListener('click', stopRitual);
+    }
   }
 
   function startRitual(type) {
-    document.getElementById('ritual-options').classList.add('hidden');
-    document.getElementById('ritual-active').classList.remove('hidden');
+    activeRitual = type;
+    const options = document.getElementById('ritual-options');
+    const active = document.getElementById('ritual-active');
+    if (options) options.style.display = 'none';
+    if (active) active.classList.remove('hidden');
 
-    // Hide all views first
-    document.querySelectorAll('.ritual-view').forEach(v => v.classList.add('hidden'));
+    // 隐藏所有视图
+    document.querySelectorAll('.ritual-view').forEach(v => v.style.display = 'none');
 
-    if (type === 'breathe') {
-      document.getElementById('ritual-breathe-view').classList.remove('hidden');
-      startBreathing(3 * 60);
-      DT.audio.playGuqin(180);
-    } else if (type === 'mindful') {
-      document.getElementById('ritual-mindful-view').classList.remove('hidden');
-      document.getElementById('mindful-count').textContent = '0';
-      startTimer('mindful-timer', 5 * 60);
-    } else if (type === 'diary') {
-      document.getElementById('ritual-diary-view').classList.remove('hidden');
+    switch (type) {
+      case 'breathe':
+        startBreathe();
+        break;
+      case 'mindful':
+        startMindful();
+        break;
+      case 'diary':
+        startDiary();
+        break;
     }
   }
 
   function stopRitual() {
-    if (ritualTimer) { clearInterval(ritualTimer); ritualTimer = null; }
-    if (breatheInterval) { clearInterval(breatheInterval); breatheInterval = null; }
-    DT.audio.stopAll();
+    if (breatheTimer) { clearInterval(breatheTimer); breatheTimer = null; }
+    activeRitual = null;
 
-    document.getElementById('ritual-options').classList.remove('hidden');
-    document.getElementById('ritual-active').classList.add('hidden');
+    const options = document.getElementById('ritual-options');
+    const active = document.getElementById('ritual-active');
+    if (options) options.style.display = '';
+    if (active) active.classList.add('hidden');
 
-    const circle = document.getElementById('breathe-circle');
-    circle.classList.remove('inhale', 'exhale');
-
-    DT.state.breathSessions = (DT.state.breathSessions || 0) + 1;
-    DT.save();
-  }
-
-  function startBreathing(totalSeconds) {
-    const timerEl = document.getElementById('breathe-timer');
-    const circle = document.getElementById('breathe-circle');
-    const label = document.getElementById('breathe-label');
-    let remaining = totalSeconds;
-    let isInhale = true;
-
-    function toggleBreath() {
-      isInhale = !isInhale;
-      if (isInhale) {
-        circle.classList.remove('exhale');
-        circle.classList.add('inhale');
-        label.textContent = '吸气';
-      } else {
-        circle.classList.remove('inhale');
-        circle.classList.add('exhale');
-        label.textContent = '呼气';
-      }
-      DT.audio.vibrate(30);
+    // 呼吸练习完成奖励
+    if (breatheSeconds > 30) {
+      DT.state.breathSessions = (DT.state.breathSessions || 0) + 1;
+      DT.state.rosaryScore = Math.min(100, (DT.state.rosaryScore || 0) + 15);
+      if (DT.pet && DT.pet.addRosary) DT.pet.addRosary(15);
+      DT.save();
     }
 
-    circle.classList.add('inhale');
-    label.textContent = '吸气';
-    breatheInterval = setInterval(toggleBreath, 4000);
-
-    ritualTimer = setInterval(() => {
-      remaining--;
-      timerEl.textContent = formatTime(remaining);
-      if (remaining <= 0) {
-        stopRitual();
-      }
-    }, 1000);
+    breatheSeconds = 0;
   }
 
-  function startTimer(elId, totalSeconds) {
-    const timerEl = document.getElementById(elId);
-    let remaining = totalSeconds;
+  /* ── 呼吸练习 ── */
+  function startBreathe() {
+    const view = document.getElementById('ritual-breathe-view');
+    if (view) view.style.display = 'block';
 
-    ritualTimer = setInterval(() => {
-      remaining--;
-      timerEl.textContent = formatTime(remaining);
-      if (remaining <= 0) {
-        stopRitual();
+    breatheSeconds = 0;
+    const timerEl = view ? view.querySelector('.timer-text') : null;
+    const circleText = view ? view.querySelector('.breathe-circle span') : null;
+
+    // 4-7-8 呼吸法
+    let phase = 0; // 0=吸 1=屏 2=呼
+    const phases = ['吸', '屏', '呼'];
+    const durations = [4, 7, 8];
+    let phaseCount = 0;
+
+    breatheTimer = setInterval(() => {
+      breatheSeconds++;
+      if (timerEl) {
+        const m = Math.floor(breatheSeconds / 60);
+        const s = breatheSeconds % 60;
+        timerEl.textContent = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+      }
+
+      phaseCount++;
+      if (phaseCount >= durations[phase]) {
+        phase = (phase + 1) % 3;
+        phaseCount = 0;
+        if (circleText) circleText.textContent = phases[phase];
       }
     }, 1000);
+
+    // 播放颂钵音效
+    if (DT.audio && DT.audio.playSingingBowl) DT.audio.playSingingBowl();
+  }
+
+  /* ── 正念盘珠 ── */
+  function startMindful() {
+    const view = document.getElementById('ritual-mindful-view');
+    if (view) view.style.display = 'block';
+
+    mindfulCount = 0;
+    const counter = view ? view.querySelector('.mindful-counter') : null;
+    const btn = view ? view.querySelector('.mindful-bead-btn') : null;
+
+    if (btn) {
+      btn.onclick = () => {
+        mindfulCount++;
+        if (counter) counter.textContent = mindfulCount;
+
+        // 音效 + 震动
+        if (DT.audio && DT.audio.playTick) DT.audio.playTick();
+        if (DT.audio && DT.audio.vibrate) DT.audio.vibrate();
+
+        // 更新功德 + 灵宠念珠
+        DT.state.meritCount = (DT.state.meritCount || 0) + 1;
+        DT.state.rosaryScore = Math.min(100, (DT.state.rosaryScore || 0) + 1);
+        if (DT.pet && DT.pet.addRosary) DT.pet.addRosary(1);
+        if (DT.social && DT.social.refresh) DT.social.refresh();
+
+        // 弹跳动画
+        btn.classList.add('bump');
+        setTimeout(() => btn.classList.remove('bump'), 300);
+
+        DT.save();
+      };
+    }
+  }
+
+  /* ── 心语日记 ── */
+  function startDiary() {
+    const view = document.getElementById('ritual-diary-view');
+    if (view) view.style.display = 'block';
   }
 
   /* ============================================================
-     SOS EMERGENCY
+     3. triggerSOS() — SOS 紧急安抚
      ============================================================ */
   function triggerSOS() {
     const overlay = document.getElementById('sos-overlay');
+    if (!overlay) return;
+
     overlay.classList.remove('hidden');
 
-    // Ink canvas animation
-    const canvas = document.getElementById('sos-ink-canvas');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    const c = canvas.getContext('2d');
-    animateInk(c, canvas.width, canvas.height);
+    // 播放颂钵
+    if (DT.audio && DT.audio.playSingingBowl) DT.audio.playSingingBowl();
 
-    // Play singing bowl
-    DT.audio.playSingingBowl(60);
-    DT.audio.vibrate([100, 50, 100]);
+    // 灵宠进入紊乱状态
+    if (DT.pet && DT.pet.addStress) DT.pet.addStress(20);
 
-    // Breathing circle in SOS
-    const circle = document.getElementById('sos-breathe');
-    let isInhale = true;
-    const sosBreath = setInterval(() => {
-      isInhale = !isInhale;
-      circle.classList.toggle('inhale', isInhale);
-      circle.classList.toggle('exhale', !isInhale);
-      circle.querySelector('span').textContent = isInhale ? '吸气' : '呼气';
-    }, 4000);
-    circle.classList.add('inhale');
-    circle.querySelector('span').textContent = '吸气';
+    // SOS 文案
+    const textEl = document.getElementById('sos-text');
+    if (textEl) {
+      const texts = [
+        '你已安全着陆。深呼吸，感受脚下的大地。\n此刻，没有什么比你的安全更重要。',
+        '闭上眼睛，感受空气从鼻尖缓缓流入…\n你是安全的，你是被爱的。',
+        '万物皆有裂缝，那是光照进来的地方。\n现在，让光照进你的心里。'
+      ];
+      textEl.textContent = texts[Math.floor(Math.random() * texts.length)];
+    }
 
-    // Exit button
-    document.getElementById('sos-exit-btn').addEventListener('click', () => {
-      clearInterval(sosBreath);
-      DT.audio.stopAll();
-      overlay.classList.add('fade-out');
-      setTimeout(() => {
+    // 水墨画布
+    initSosInk();
+
+    // 退出按钮
+    const exitBtn = document.getElementById('sos-exit-btn');
+    if (exitBtn) {
+      exitBtn.onclick = () => {
         overlay.classList.add('hidden');
-        overlay.classList.remove('fade-out');
-        circle.classList.remove('inhale', 'exhale');
-      }, 600);
-    }, { once: true });
+        // 逐步恢复灵宠
+        if (DT.pet && DT.pet.addRosary) DT.pet.addRosary(10);
+        if (DT.audio && DT.audio.stopAll) DT.audio.stopAll();
+      };
+    }
   }
 
-  /* --- Ink spread animation on canvas --- */
-  function animateInk(ctx, w, h) {
-    const drops = [];
-    for (let i = 0; i < 8; i++) {
-      drops.push({
-        x: w * (0.2 + Math.random() * 0.6),
-        y: h * (0.2 + Math.random() * 0.6),
-        r: 0,
-        maxR: Math.max(w, h) * 0.5,
-        speed: 1 + Math.random() * 2,
-        alpha: 0.6 + Math.random() * 0.3
+  /* ============================================================
+     SOS 水墨动画
+     ============================================================ */
+  function initSosInk() {
+    const canvas = document.getElementById('sos-ink-canvas');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let particles = [];
+    for (let i = 0; i < 60; i++) {
+      particles.push({
+        x: canvas.width / 2 + (Math.random() - 0.5) * 200,
+        y: canvas.height / 2 + (Math.random() - 0.5) * 200,
+        vx: (Math.random() - 0.5) * 1.5,
+        vy: (Math.random() - 0.5) * 1.5,
+        r: 2 + Math.random() * 6,
+        alpha: 0.1 + Math.random() * 0.3
       });
     }
 
+    let animId = null;
     function draw() {
-      ctx.clearRect(0, 0, w, h);
-      ctx.fillStyle = 'rgba(20, 20, 20, 0.3)';
-      ctx.fillRect(0, 0, w, h);
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-      let allDone = true;
-      drops.forEach(d => {
-        if (d.r < d.maxR) {
-          d.r += d.speed;
-          allDone = false;
-        }
-        const grad = ctx.createRadialGradient(d.x, d.y, 0, d.x, d.y, d.r);
-        grad.addColorStop(0, `rgba(30, 30, 30, ${d.alpha})`);
-        grad.addColorStop(0.5, `rgba(40, 40, 40, ${d.alpha * 0.5})`);
-        grad.addColorStop(1, 'rgba(50, 50, 50, 0)');
-        ctx.fillStyle = grad;
+      particles.forEach(p => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.alpha *= 0.998;
+
+        if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+        if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+
         ctx.beginPath();
-        ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(212, 195, 163, ${p.alpha})`;
         ctx.fill();
       });
 
-      if (!allDone) requestAnimationFrame(draw);
+      const overlay = document.getElementById('sos-overlay');
+      if (overlay && !overlay.classList.contains('hidden')) {
+        animId = requestAnimationFrame(draw);
+      }
     }
+
+    if (animId) cancelAnimationFrame(animId);
     draw();
   }
 
-  /* --- Utility --- */
-  function formatTime(s) {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${m}:${sec.toString().padStart(2, '0')}`;
-  }
-
+  /* ============================================================
+     暴露公共 API → DT.ritual
+     ============================================================ */
   return {
     showOnboarding,
     initRituals,

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>灵宠 API 连通性测试</title>
+  <style>
+    body { font-family: system-ui; background: #0d0d0d; color: #e8e0d4; max-width: 600px; margin: 40px auto; padding: 20px; }
+    h1 { color: #d4c3a3; font-size: 1.3rem; }
+    .test { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; margin: 12px 0; }
+    .test h3 { color: #d4c3a3; margin: 0 0 8px; font-size: 0.95rem; }
+    .status { font-size: 0.85rem; padding: 4px 10px; border-radius: 6px; display: inline-block; }
+    .pass { background: rgba(90,143,110,0.3); color: #5a8f6e; }
+    .fail { background: rgba(194,91,86,0.3); color: #c25b56; }
+    .wait { background: rgba(212,195,163,0.2); color: #d4c3a3; }
+    pre { background: rgba(0,0,0,0.3); padding: 12px; border-radius: 8px; font-size: 0.8rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow-y: auto; }
+    button { background: #d4c3a3; color: #0d0d0d; border: none; padding: 10px 24px; border-radius: 8px; cursor: pointer; font-weight: 600; margin: 8px 4px; }
+    button:hover { box-shadow: 0 0 16px rgba(212,195,163,0.3); }
+    #stream-output { min-height: 60px; }
+  </style>
+</head>
+<body>
+  <h1>🐉 灵宠 API 连通性测试</h1>
+  <p style="color:rgba(232,224,212,0.5);font-size:0.85rem;">后端: https://7f50edaa-9bdb-4e88-beea-dbb364ef08fa.dev.coze.site</p>
+
+  <div class="test" id="test1">
+    <h3>测试1: 非流式对话 POST /api/lingchong/chat</h3>
+    <span class="status wait" id="s1">⏳ 等待</span>
+    <pre id="r1">点击下方按钮开始测试</pre>
+  </div>
+
+  <div class="test" id="test2">
+    <h3>测试2: 流式 SSE POST /api/lingchong/stream</h3>
+    <span class="status wait" id="s2">⏳ 等待</span>
+    <pre id="r2">点击下方按钮开始测试</pre>
+    <div id="stream-output" style="color:#5a8f6e;font-style:italic;margin-top:8px;"></div>
+  </div>
+
+  <button onclick="testChat()">🔍 测试非流式</button>
+  <button onclick="testStream()">🌊 测试流式 SSE</button>
+  <button onclick="testChat();testStream();">🚀 全部测试</button>
+
+<script>
+const BASE = 'https://7f50edaa-9bdb-4e88-beea-dbb364ef08fa.dev.coze.site';
+const BODY = {
+  message: '你好灵宠，今天心情不错',
+  user_id: 'frontend_test_001',
+  user_body_type: '平和质',
+  pet_name: '清啸霜灵',
+  pet_element: '金',
+  current_stress_score: '30',
+  solar_term: '芒种'
+};
+
+async function testChat() {
+  const s = document.getElementById('s1');
+  const r = document.getElementById('r1');
+  s.className = 'status wait'; s.textContent = '⏳ 请求中...';
+  r.textContent = '发送请求到 /api/lingchong/chat ...';
+
+  try {
+    const t0 = Date.now();
+    const resp = await fetch(BASE + '/api/lingchong/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(BODY)
+    });
+    const elapsed = Date.now() - t0;
+
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    s.className = 'status pass';
+    s.textContent = `✅ 成功 (${elapsed}ms)`;
+    r.textContent = JSON.stringify(data, null, 2);
+  } catch (e) {
+    s.className = 'status fail';
+    s.textContent = '❌ 失败';
+    r.textContent = e.message;
+  }
+}
+
+async function testStream() {
+  const s = document.getElementById('s2');
+  const r = document.getElementById('r2');
+  const out = document.getElementById('stream-output');
+  s.className = 'status wait'; s.textContent = '⏳ 请求中...';
+  r.textContent = '发送请求到 /api/lingchong/stream ...';
+  out.textContent = '';
+
+  try {
+    const t0 = Date.now();
+    const resp = await fetch(BASE + '/api/lingchong/stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(BODY)
+    });
+
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '', fullText = '', trigger = 'normal', events = [];
+    let currentEventType = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) { currentEventType = ''; continue; }
+
+        if (trimmed.startsWith('event:')) {
+          currentEventType = trimmed.slice(6).trim();
+          continue;
+        }
+
+        if (trimmed.startsWith('data:')) {
+          const dataStr = trimmed.slice(5).trim();
+          if (currentEventType === 'done' || dataStr === '[DONE]') {
+            events.push({ event: 'done', data: '[DONE]' });
+            continue;
+          }
+          try {
+            const evt = JSON.parse(dataStr);
+            events.push({ event: currentEventType, ...evt });
+
+            if (evt.type === 'delta' && evt.content) {
+              fullText += evt.content;
+              out.textContent = '灵宠说: ' + fullText;
+            }
+            if (evt.type === 'finished') {
+              if (evt.content) fullText = evt.content;
+              trigger = evt.animation_trigger || 'normal';
+              out.textContent = '灵宠说: ' + fullText;
+            }
+          } catch (e) {}
+        }
+      }
+    }
+
+    const elapsed = Date.now() - t0;
+    s.className = 'status pass';
+    s.textContent = `✅ 成功 (${elapsed}ms, ${events.length} events, trigger: ${trigger})`;
+    r.textContent = events.map(e => JSON.stringify(e)).join('\n');
+
+  } catch (e) {
+    s.className = 'status fail';
+    s.textContent = '❌ 失败';
+    r.textContent = e.message;
+  }
+}
+</script>
+</body>
+</html>
